@@ -21,7 +21,6 @@ def format_idr(n):
 
 def clean_val(t):
     try:
-        # Menangani format ribuan titik dan desimal koma
         t_str = str(t).replace(".", "").replace(",", ".")
         return float(t_str)
     except:
@@ -60,10 +59,9 @@ st.markdown("---")
 
 # --- UTAMA: UPLOAD & PROSES ---
 st.subheader("2️⃣ Upload & Eksekusi")
-uploaded_file = st.file_uploader("Upload File Excel Populasi (Pastikan ada kolom 'Nilai')", type=["xlsx"])
+uploaded_file = st.file_uploader("Upload File Excel Populasi", type=["xlsx"])
 
 if uploaded_file:
-    # Membaca file dengan engine openpyxl untuk .xlsx
     df_pop = pd.read_excel(uploaded_file)
     
     if 'Nilai' in df_pop.columns:
@@ -75,12 +73,10 @@ if uploaded_file:
                 tm = clean_val(tm_raw)
                 z = round(abs(norm.ppf((dr_pct/100)/2)), 4)
                 
-                # Mapping Target ACov sesuai arahan Pak Syakur
                 if dr_pct <= 10: target_acov, cat = 0.51, "RENDAH (High Assurance)"
                 elif dr_pct <= 20: target_acov, cat = 0.31, "MENENGAH (Moderate)"
                 else: target_acov, cat = 0.21, "TINGGI (Low Assurance)"
 
-                # Stratifikasi (Strata 1 = Nilai Terbesar)
                 bins = np.linspace(df_pop['Nilai'].min(), df_pop['Nilai'].max(), n_st + 1)
                 df_pop['Strata'] = pd.cut(df_pop['Nilai'], bins=bins, labels=list(range(n_st, 0, -1)), include_lowest=True)
                 df_pop['Strata'] = df_pop['Strata'].astype(int)
@@ -89,7 +85,6 @@ if uploaded_file:
                 st_h['W'] = st_h['count'] * st_h['std']
                 st_h['n_h'] = 0
                 
-                # Iterasi Presisi & Coverage
                 n_iter, prec, acov, loops = max(int(len(df_pop)*0.05), n_st * 2), 9e15, 0.0, 0
                 while (prec > tm or acov < target_acov) and (n_iter <= len(df_pop)):
                     loops += 1
@@ -107,10 +102,8 @@ if uploaded_file:
                     else: break
                     if loops > 200: break
 
-                # Sampel Akhir
                 df_s = pd.concat([df_pop[df_pop['Strata'] == i].sample(n=int(row['n_h'])) for i, row in st_h.iterrows() if row['n_h'] > 0])
                 
-                # Dashboard Hasil
                 st.markdown("### 📊 Ringkasan Statistik")
                 c1, c2, c3 = st.columns(3)
                 c1.metric("Kategori DR", cat)
@@ -122,6 +115,9 @@ if uploaded_file:
                 kkp.columns = ['Strata', 'Batas Bawah', 'Batas Atas', 'Jml Pop', 'n Sampel', 'Nilai Pop', 'Nilai Sampel']
                 st.table(kkp.style.format({c: format_idr for c in ['Batas Bawah', 'Batas Atas', 'Nilai Pop', 'Nilai Sampel']}))
                 
-                # Download Hasil Excel
                 res_buffer = io.BytesIO()
-                with pd.ExcelWriter(res_buffer, engine='openpyxl
+                with pd.ExcelWriter(res_buffer, engine='openpyxl') as writer:
+                    df_s.to_excel(writer, index=False)
+                st.download_button("📥 Download Daftar Sampel Jadi", data=res_buffer.getvalue(), file_name=f"Hasil_Sampel_{nama_akun_audit}.xlsx")
+    else:
+        st.error("Kolom 'Nilai' tidak ditemukan!")
