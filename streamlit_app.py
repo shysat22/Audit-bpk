@@ -4,10 +4,10 @@ import numpy as np
 from scipy.stats import norm
 import io
 
-# 1. KONFIGURASI HALAMAN (Optimasi Web & Mobile)
+# 1. KONFIGURASI HALAMAN
 st.set_page_config(page_title="Audit Sampling BPK", layout="centered")
 
-# CSS Kustom untuk Header Biru BPK
+# CSS Kustom Header Biru BPK
 st.markdown("""
     <style>
     .main-header {
@@ -50,15 +50,14 @@ with col_1:
 
 with col_2:
     dr_pct = st.number_input("DR (Risiko Deteksi) %", value=7.0, step=0.5)
-    # MENGUBAH SLIDER MENJADI DROPDOWN (selectbox)
-    n_st = st.selectbox("Jumlah Strata", options=list(range(3, 11)), index=7) # index 7 berarti default ke angka 10
+    n_st = st.selectbox("Jumlah Strata", options=list(range(3, 11)), index=7)
 
 st.divider()
 
 # --- BAGIAN 1: PREPARASI ---
 st.subheader("1️⃣ Persiapan Data")
 with st.expander("Lihat Petunjuk & Download Template"):
-    st.write("Pastikan file Excel memiliki kolom: **Kode, Nama OPD, Nama Akun, Keterangan, Nilai**.")
+    st.write("Pastikan file Excel yang Anda gunakan memiliki kolom: **Kode, Nama OPD, Nama Akun, Keterangan, Nilai**.")
     
     template_buffer = io.BytesIO()
     df_template = pd.DataFrame({
@@ -82,17 +81,17 @@ st.divider()
 
 # --- BAGIAN 2: EKSEKUSI ---
 st.subheader("2️⃣ Upload & Eksekusi")
-uploaded_file = st.file_uploader("Upload File Populasi (.xlsx)", type=["xlsx"])
+uploaded_file = st.file_uploader("Upload File Populasi (.xlsx) Anda", type=["xlsx"])
 
 if uploaded_file:
     df_pop = pd.read_excel(uploaded_file)
     
     if 'Nilai' in df_pop.columns:
         df_pop['Nilai'] = pd.to_numeric(df_pop['Nilai'], errors='coerce').fillna(0)
-        st.success(f"✅ Data dimuat: {len(df_pop)} Baris")
+        st.success(f"✅ Data berhasil dimuat. Terdapat {len(df_pop)} baris dalam populasi Anda.")
         
         if st.button("🚀 JALANKAN SAMPLING", use_container_width=True):
-            with st.spinner('Memproses statistik...'):
+            with st.spinner('Sedang memproses perhitungan statistik...'):
                 tm = clean_val(tm_raw)
                 z = round(abs(norm.ppf((dr_pct/100)/2)), 4)
                 
@@ -149,12 +148,12 @@ if uploaded_file:
                     with pd.ExcelWriter(res_buffer, engine='openpyxl') as writer:
                         df_s.to_excel(writer, index=False)
                     st.download_button(
-                        label="📥 DOWNLOAD HASIL SAMPEL (EXCEL)", 
+                        label="📥 DOWNLOAD DAFTAR SAMPEL ANDA (EXCEL)", 
                         data=res_buffer.getvalue(), 
                         file_name=f"Sampel_{nama_akun_audit}.xlsx",
                         use_container_width=True
                     )
                 else:
-                    st.error("Gagal membentuk sampel. Periksa nilai TM Bapak.")
+                    st.error("Gagal membentuk sampel. Mohon periksa kembali apakah nilai TM yang Anda masukkan sudah realistis terhadap data populasi.")
     else:
-        st.error("Kolom 'Nilai' tidak ditemukan!")
+        st.error("Kolom 'Nilai' tidak ditemukan! Pastikan file yang Anda unggah mengikuti format template.")
