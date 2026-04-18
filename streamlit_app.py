@@ -24,7 +24,7 @@ st.markdown("""
     }
     </style>
     <div class="main-header">
-        <h2 style='margin:0;'>🏛️ Sistem Sampling Digital</h2>
+        <h2 style='margin:0;'>Pemilihan Sampel Pemeriksaan secara Statistika</h2>
         <p style='margin:0; font-size: 0.9em;'>Metode Stratified MPU</p>
     </div>
     """, unsafe_allow_html=True)
