@@ -4,10 +4,10 @@ import numpy as np
 from scipy.stats import norm
 import io
 
-# 1. KONFIGURASI HALAMAN (Mobile & Web Friendly)
+# 1. KONFIGURASI HALAMAN (Optimasi Web & Mobile)
 st.set_page_config(page_title="Audit Sampling BPK", layout="centered")
 
-# CSS Kustom untuk menyesuaikan elemen di layar HP
+# CSS Kustom untuk Header Biru BPK
 st.markdown("""
     <style>
     .main-header {
@@ -18,7 +18,6 @@ st.markdown("""
         color: white;
         text-align: center;
     }
-    /* Menghilangkan padding berlebih di mobile */
     .block-container {
         padding-top: 2rem;
         padding-bottom: 2rem;
@@ -43,7 +42,6 @@ def clean_val(t):
 
 # --- PANEL PARAMETER ---
 st.subheader("⚙️ Parameter Audit")
-# Menggunakan kolom yang akan menumpuk (stack) otomatis di Mobile
 col_1, col_2 = st.columns([1, 1])
 
 with col_1:
@@ -52,7 +50,8 @@ with col_1:
 
 with col_2:
     dr_pct = st.number_input("DR (Risiko Deteksi) %", value=7.0, step=0.5)
-    n_st = st.slider("Jumlah Strata", 3, 10, 10)
+    # MENGUBAH SLIDER MENJADI DROPDOWN (selectbox)
+    n_st = st.selectbox("Jumlah Strata", options=list(range(3, 11)), index=7) # index 7 berarti default ke angka 10
 
 st.divider()
 
@@ -66,7 +65,7 @@ with st.expander("Lihat Petunjuk & Download Template"):
         'Kode': ['1.02.01', '1.02.02'],
         'Nama OPD': ['Dinas Kesehatan', 'Dinas Pendidikan'],
         'Nama Akun': ['Belanja Barang', 'Belanja Jasa'],
-        'Keterangan': ['A', 'B'],
+        'Keterangan': ['Contoh A', 'Contoh B'],
         'Nilai': [75000000, 120000000]
     })
     with pd.ExcelWriter(template_buffer, engine='openpyxl') as writer:
@@ -75,14 +74,14 @@ with st.expander("Lihat Petunjuk & Download Template"):
     st.download_button(
         label="📥 Download Template Excel", 
         data=template_buffer.getvalue(), 
-        file_name="Template_Audit.xlsx",
-        use_container_width=True # Agar tombol memenuhi lebar layar di HP
+        file_name="Template_Audit_BPK.xlsx",
+        use_container_width=True
     )
 
 st.divider()
 
 # --- BAGIAN 2: EKSEKUSI ---
-st.subheader("2️⃣ Upload & Proses")
+st.subheader("2️⃣ Upload & Eksekusi")
 uploaded_file = st.file_uploader("Upload File Populasi (.xlsx)", type=["xlsx"])
 
 if uploaded_file:
@@ -92,13 +91,11 @@ if uploaded_file:
         df_pop['Nilai'] = pd.to_numeric(df_pop['Nilai'], errors='coerce').fillna(0)
         st.success(f"✅ Data dimuat: {len(df_pop)} Baris")
         
-        # Tombol besar yang nyaman ditekan di HP
         if st.button("🚀 JALANKAN SAMPLING", use_container_width=True):
             with st.spinner('Memproses statistik...'):
                 tm = clean_val(tm_raw)
                 z = round(abs(norm.ppf((dr_pct/100)/2)), 4)
                 
-                # Logic Target ACov
                 if dr_pct <= 10: target_acov, cat = 0.51, "RENDAH"
                 elif dr_pct <= 20: target_acov, cat = 0.31, "MENENGAH"
                 else: target_acov, cat = 0.21, "TINGGI"
@@ -112,7 +109,7 @@ if uploaded_file:
                 st_h['W'] = st_h['count'] * st_h['std']
                 st_h['n_h'] = 0
                 
-                # Iterasi Presisi & Coverage
+                # Iterasi
                 n_iter, prec, acov, loops = max(int(len(df_pop)*0.05), n_st * 2), 9e15, 0.0, 0
                 while (prec > tm or acov < target_acov) and (n_iter <= len(df_pop)):
                     loops += 1
@@ -129,35 +126,35 @@ if uploaded_file:
                     
                     if (prec > tm or acov < target_acov): n_iter += max(5, int(len(df_pop)*0.02))
                     else: break
-                    if loops > 200: break
+                    if loops > 300: break
 
-                # Hasil Akhir
-                df_s = pd.concat([df_pop[df_pop['Strata'] == i].sample(n=int(row['n_h'])) for i, row in st_h.iterrows() if row['n_h'] > 0])
+                # Finalisasi Sampel
+                samples_list = [df_pop[df_pop['Strata'] == i].sample(n=int(row['n_h'])) for i, row in st_h.iterrows() if row['n_h'] > 0]
                 
-                # Output untuk Mobile: Menggunakan Metric
-                st.markdown("### 📊 Hasil Analisis")
-                m1, m2 = st.columns(2)
-                m1.metric("Risiko DR", cat)
-                m2.metric("Coverage", f"{acov*100:.1f}%")
-                st.metric("Precision Achieved (A')", format_idr(prec))
+                if samples_list:
+                    df_s = pd.concat(samples_list)
+                    st.markdown("### 📊 Hasil Analisis")
+                    m1, m2 = st.columns(2)
+                    m1.metric("Risiko DR", cat)
+                    m2.metric("Coverage", f"{acov*100:.1f}%")
+                    st.metric("Precision Achieved (A')", format_idr(prec))
 
-                # Tabel diletakkan dalam expander agar tidak memakan ruang di HP
-                with st.expander("Lihat Rincian Per Strata"):
-                    st_h['Sum_S'] = df_s.groupby('Strata')['Nilai'].sum()
-                    kkp = st_h.sort_index().reset_index()[['Strata', 'min', 'max', 'count', 'n_h', 'sum', 'Sum_S']]
-                    kkp.columns = ['Strata', 'Min', 'Max', 'N Pop', 'n Sampel', 'Nilai Pop', 'Nilai Sampel']
-                    st.dataframe(kkp.style.format({c: format_idr for c in ['Min', 'Max', 'Nilai Pop', 'Nilai Sampel']}))
-                
-                # Tombol Download Akhir
-                res_buffer = io.BytesIO()
-                with pd.ExcelWriter(res_buffer, engine='openpyxl') as writer:
-                    df_s.to_excel(writer, index=False)
-                st.download_button(
-                    label="📥 DOWNLOAD HASIL SAMPEL (EXCEL)", 
-                    data=res_buffer.getvalue(), 
-                    file_name=f"Sampel_{nama_akun_audit}.xlsx",
-                    use_container_width=True,
-                    button_style='primary'
-                )
+                    with st.expander("Lihat Rincian Per Strata"):
+                        st_h['Sum_S'] = df_s.groupby('Strata')['Nilai'].sum()
+                        kkp = st_h.sort_index().reset_index()[['Strata', 'min', 'max', 'count', 'n_h', 'sum', 'Sum_S']]
+                        kkp.columns = ['Strata', 'Min', 'Max', 'N Pop', 'n Sampel', 'Nilai Pop', 'Nilai Sampel']
+                        st.dataframe(kkp.style.format({c: format_idr for c in ['Min', 'Max', 'Nilai Pop', 'Nilai Sampel']}))
+                    
+                    res_buffer = io.BytesIO()
+                    with pd.ExcelWriter(res_buffer, engine='openpyxl') as writer:
+                        df_s.to_excel(writer, index=False)
+                    st.download_button(
+                        label="📥 DOWNLOAD HASIL SAMPEL (EXCEL)", 
+                        data=res_buffer.getvalue(), 
+                        file_name=f"Sampel_{nama_akun_audit}.xlsx",
+                        use_container_width=True
+                    )
+                else:
+                    st.error("Gagal membentuk sampel. Periksa nilai TM Bapak.")
     else:
         st.error("Kolom 'Nilai' tidak ditemukan!")
